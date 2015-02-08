@@ -8,34 +8,33 @@ import java.util.stream.Collectors;
 /**
  * Created by fib on 08/02/15.
  */
-public class Manager<T extends Comparable<T>> {
+public class Manager {
     private final Tokenizer tokenizer;
     private final Normalizer normalizer;
     private final StopWordsAnalyzer stopWordsAnalyzer;
-    private final Indexer<T> indexer;
+    private final Indexer indexer;
 
     public Manager(final Set<String> stopWords) throws IOException {
         tokenizer = new Tokenizer();
         normalizer = new Normalizer();
         stopWordsAnalyzer = new StopWordsAnalyzer(stopWords);
-        indexer = new Indexer<>();
+        indexer = new Indexer();
     }
 
-    public void insertDocument(final T id, final String text) {
-        final List<String> terms =  stopWordsAnalyzer.execute(normalizer.execute(tokenizer.execute(text)));
+    public void insertDocument(final Long id, final String text) {
+        final List<String> terms = stopWordsAnalyzer.execute(normalizer.execute(tokenizer.execute(text)));
         indexer.put(id, terms);
     }
 
-    public List<T> searchDocuments(final String query, final String logic, final int count) {
+    public List<Long> searchDocuments(final String query, final String logic, final int count) {
         final List<String> terms =  getTerms(query);
-        System.out.println(logic.equalsIgnoreCase("AND"));
-        final List<T> documents = (logic.equalsIgnoreCase("AND")
+        final List<Long> documents = (logic.equalsIgnoreCase("AND")
                 ? indexer.andOperation(terms)
                 : indexer.orOperation(terms));
         return documents.stream().limit(count).collect(Collectors.toList());
     }
 
-    private List<String> getTerms(String text){
+    private List<String> getTerms(final String text){
         return stopWordsAnalyzer.execute(normalizer.execute(tokenizer.execute(text)));
     }
 }

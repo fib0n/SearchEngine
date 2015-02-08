@@ -10,8 +10,8 @@ import java.util.Map;
 /**
  * Created by fib on 08/02/15.
  */
-public class SearchHttpHandler extends BaseHttpHandler<Long> {
-    public SearchHttpHandler(Manager<Long> manager) {
+public class SearchHttpHandler extends BaseHttpHandler {
+    public SearchHttpHandler(Manager manager) {
         super(manager);
     }
 

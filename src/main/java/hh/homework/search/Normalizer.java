@@ -20,8 +20,8 @@ class Normalizer {
         englishMorphology = new EnglishLuceneMorphology();
     }
 
-    public List<String> execute(String[] words) {
-        final List<String> normalForms = new ArrayList<>(words.length);
+    public List<String> execute(List<String> words) {
+        final List<String> normalForms = new ArrayList<>(words.size());
         for (final String word : words) {
             List<String> nfs = null;
             try {

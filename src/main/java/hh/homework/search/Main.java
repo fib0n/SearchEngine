@@ -11,7 +11,7 @@ import java.net.InetSocketAddress;
  */
 class Main {
     public static void main(String[] args) throws Exception {
-        final Manager<Long> manager = new Manager<>(ResourceUtils.readDistinctLines("StopWords.txt"));
+        final Manager manager = new Manager(ResourceUtils.readDistinctLines("StopWords.txt"));
         final HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         server.createContext("/search", new SearchHttpHandler(manager));
         server.createContext("/index", new IndexHttpHandler(manager));

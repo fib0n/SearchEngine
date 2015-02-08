@@ -12,10 +12,10 @@ import java.io.InputStreamReader;
 /**
  * Created by fib on 08/02/15.
  */
-public class IndexHttpHandler extends BaseHttpHandler<Long> {
+public class IndexHttpHandler extends BaseHttpHandler {
     private final JSONParser jsonParser;
 
-    public IndexHttpHandler(Manager<Long> manager) {
+    public IndexHttpHandler(Manager manager) {
         super(manager);
         jsonParser = new JSONParser();
     }
