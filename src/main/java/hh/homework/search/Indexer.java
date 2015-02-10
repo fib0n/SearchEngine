@@ -47,18 +47,19 @@ class Indexer {
         }
     }
 
-    public List<Long> andOperation(final List<String> terms) {
-        return rank(and(terms));
+    public List<Long> andOperation(final List<String> terms, final int count) {
+        return rank(and(terms), count);
     }
 
-    public List<Long> orOperation(final List<String> terms) {
-        return rank(or(terms));
+    public List<Long> orOperation(final List<String> terms, final int count) {
+        return rank(or(terms), count);
     }
 
-    private List<Long> rank(final List<Pair> ids) {
+    private List<Long> rank(final List<Pair> ids, final int count) {
         return ids.stream()
                 .sorted((a, b) -> -Double.compare(a.score, b.score))
                 .map(e -> e.id)
+                .limit(count)
                 .collect(Collectors.toList());
     }
 

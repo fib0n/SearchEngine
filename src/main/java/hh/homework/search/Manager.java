@@ -29,9 +29,9 @@ public class Manager {
     public List<Long> searchDocuments(final String query, final String logic, final int count) {
         final List<String> terms =  getTerms(query);
         final List<Long> documents = (logic.equalsIgnoreCase("AND")
-                ? indexer.andOperation(terms)
-                : indexer.orOperation(terms));
-        return documents.stream().limit(count).collect(Collectors.toList());
+                ? indexer.andOperation(terms, count)
+                : indexer.orOperation(terms, count));
+        return documents;
     }
 
     private List<String> getTerms(final String text){
