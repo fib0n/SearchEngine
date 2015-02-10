@@ -1,7 +1,5 @@
 package hh.homework.search;
 
-import com.google.common.collect.Lists;
-
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -13,7 +11,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * Created by fib on 08/02/15.
  */
 class Indexer {
-    private final ConcurrentHashMap<String, NavigableSet<IndexElement>> invertedIndex;
+    private final ConcurrentHashMap<String, SortedSet<IndexElement>> invertedIndex;
     private final Set<Long> documentsIds;
     private long documentsCount;
 
@@ -42,122 +40,114 @@ class Indexer {
             if (invertedIndex.containsKey(word)) {
                 invertedIndex.get(word).add(new IndexElement(id, (double) wordCounts.get(word) / documentSize));
             } else {
-                final NavigableSet<IndexElement> indexElements = new TreeSet<>();
+                final SortedSet<IndexElement> indexElements = new TreeSet<>();
                 indexElements.add(new IndexElement(id, (double) wordCounts.get(word) / documentSize));
                 invertedIndex.put(word, indexElements);
             }
-            //System.out.println("tf:" + (double) wordCounts.get(word) / documentSize);
         }
     }
 
     public List<Long> andOperation(final List<String> terms) {
-        return rank(and(terms), terms);
+        return rank(and(terms));
     }
 
     public List<Long> orOperation(final List<String> terms) {
-        return rank(or(terms), terms);
+        return rank(or(terms));
     }
 
-    private List<Long> rank(final List<Long> ids, final List<String> terms) {
+    private List<Long> rank(final List<Pair> ids) {
         return ids.stream()
-                .sorted((a, b) -> -Double.compare(getScore(a, terms), getScore(b, terms)))
+                .sorted((a, b) -> -Double.compare(a.score, b.score))
+                .map(e -> e.id)
                 .collect(Collectors.toList());
     }
 
-    private double getScore(final Long id, final List<String> terms) {
-        double score = 0.0;
-        for (final String term : terms) {
-            final NavigableSet<IndexElement> set = invertedIndex.get(term);
-            if (set != null) {
-                final IndexElement virtualElement = new IndexElement(id, 0);
-                if (set.contains(virtualElement)) {
-                    double idf = Math.log((double) documentsCount / set.size());
-                    score += set.floor(virtualElement).tf * idf;
-                }
-            }
-        }
-        return score;
-    }
-
-
-    private Iterator<IndexElement> intersect(final Iterator<IndexElement> a, final Iterator<IndexElement> b) {
-        //todo переписать без создания ArrayList
-        final List<IndexElement> c = new ArrayList<>();
-        if (a.hasNext() && b.hasNext()) {
-            IndexElement currentA = a.next();
-            IndexElement currentB = b.next();
+    private List<Pair> intersect(final List<Pair> documents,
+                                 final double idf,
+                                 final Iterator<IndexElement> iterator) {
+        //todo переписать без создания результирующего ArrayList на каждом шаге
+        final List<Pair> result = new ArrayList<>();
+        final Iterator<Pair> documentsIterator = documents.iterator();
+        if (documentsIterator.hasNext() && iterator.hasNext()) {
+            Pair currentA = documentsIterator.next();
+            IndexElement currentB = iterator.next();
             while (true) {
-                int compareResult = currentA.compareTo(currentB);
+                int compareResult = currentA.id.compareTo(currentB.id);
                 if (compareResult < 0) {
-                    if (a.hasNext())
-                        currentA = a.next();
+                    if (documentsIterator.hasNext())
+                        currentA = documentsIterator.next();
                     else
                         break;
                 } else if (compareResult > 0) {
-                    if (b.hasNext())
-                        currentB = b.next();
+                    if (iterator.hasNext())
+                        currentB = iterator.next();
                     else
                         break;
                 } else {
-                    c.add(currentA);
-                    if (a.hasNext() && b.hasNext()) {
-                        currentA = a.next();
-                        currentB = b.next();
+                    result.add(new Pair(currentA.id, currentA.score + currentB.tf * idf));
+                    if (documentsIterator.hasNext() && iterator.hasNext()) {
+                        currentA = documentsIterator.next();
+                        currentB = iterator.next();
                     } else
                         break;
                 }
             }
         }
-
-        return c.iterator();
+        return result;
     }
 
-    private List<Long> and(final List<String> terms) {
-        final List<Iterator<IndexElement>> indexValues = new ArrayList<>();
-        for(final String term: terms){
-            if (!invertedIndex.containsKey(term)){
+    private List<Pair> and(final List<String> terms) {
+        List<Pair> documents = null;
+        for (final String term : terms) {
+            if (!invertedIndex.containsKey(term)) {
                 return new ArrayList<>();
             }
-
-            final Iterator<IndexElement> iterator = invertedIndex.get(term).iterator();
-            if (iterator.hasNext()) {
-                indexValues.add(iterator);
+            final SortedSet<IndexElement> documentsByTerm = invertedIndex.get(term);
+            if (documentsByTerm == null || documentsByTerm.isEmpty()) {
+                return new ArrayList<>();
+            }
+            final double idf = Math.log((double) documentsCount / documentsByTerm.size());
+            if (documents == null) {
+                documents = documentsByTerm
+                        .stream()
+                        .map(e -> new Pair(e.id, e.tf * idf))
+                        .collect(Collectors.toList());
+            } else {
+                final Iterator<IndexElement> iterator = documentsByTerm.iterator();
+                documents = intersect(documents, idf, iterator);
             }
         }
-        final Iterator<Iterator<IndexElement>> indexValuesIterator = indexValues.iterator();
-
-        if (indexValuesIterator.hasNext()) {
-            Iterator<IndexElement> current = indexValuesIterator.next();
-            while (current.hasNext() && indexValuesIterator.hasNext()) {
-                current = intersect(current, indexValuesIterator.next());
-            }
-            return Lists.newArrayList(current).stream().map(t -> t.id).collect(Collectors.toList());
-        }
-
-        return new ArrayList<>();
+        return documents;
     }
 
-    private List<Long> or(final List<String> terms) {
+    private List<Pair> or(final List<String> terms) {
         if (terms == null || terms.size() == 0)
             return new ArrayList<>();
 
         final PriorityQueue<QueueElement> pq = new PriorityQueue<>(terms.size());
         terms.stream().filter(invertedIndex::containsKey).forEach(term -> {
-            final Iterator<IndexElement> iterator = invertedIndex.get(term).iterator();
+            final SortedSet<IndexElement> documentsByTerm = invertedIndex.get(term);
+            final Iterator<IndexElement> iterator = documentsByTerm.iterator();
             if (iterator.hasNext()) {
-                pq.add(new QueueElement(iterator.next().id, iterator));
+                pq.add(new QueueElement(
+                        iterator.next(),
+                        Math.log((double) documentsCount / documentsByTerm.size()),
+                        iterator));
             }
         });
-        final List<Long> documents = new ArrayList<>();
-        Long previous = null;
+        final List<Pair> documents = new ArrayList<>();
+        Long previousDocumentId = null;
         while (!pq.isEmpty()) {
             final QueueElement queueElement = pq.poll();
-            if (previous == null || previous.compareTo(queueElement.currentId) != 0) {
-                previous = queueElement.currentId;
-                documents.add(queueElement.currentId);
+            if (previousDocumentId != null && queueElement.current.id.compareTo(previousDocumentId) == 0) {
+                final Pair last = documents.get(documents.size() - 1);
+                last.score += queueElement.current.tf * queueElement.idf;
+            } else {
+                previousDocumentId = queueElement.current.id;
+                documents.add(new Pair(queueElement.current.id, queueElement.current.tf * queueElement.idf));
             }
             if (queueElement.iterator.hasNext()) {
-                pq.add(new QueueElement(queueElement.iterator.next().id, queueElement.iterator));
+                pq.add(new QueueElement(queueElement.iterator.next(), queueElement.idf, queueElement.iterator));
             }
         }
         return documents;
@@ -168,7 +158,7 @@ class Indexer {
         private final double tf;
 
         IndexElement(final Long id, final double tf) {
-            this.id = id;
+            this.id = checkNotNull(id);
             this.tf = tf;
         }
 
@@ -185,18 +175,30 @@ class Indexer {
         }
     }
 
+    private static class Pair {
+        private final Long id;
+        public double score;
+
+        Pair(final Long id, final double initialScore) {
+            this.id = id;
+            score = initialScore;
+        }
+    }
+
     private static class QueueElement implements Comparable<QueueElement> {
-        private final Long currentId;
+        private final IndexElement current;
+        private final double idf;
         private final Iterator<IndexElement> iterator;
 
-        QueueElement(final Long currentId, final Iterator<IndexElement> iterator) {
-            this.currentId = currentId;
+        QueueElement(final IndexElement current, final double idf, final Iterator<IndexElement> iterator) {
+            this.current = checkNotNull(current);
+            this.idf = idf;
             this.iterator = checkNotNull(iterator);
         }
 
         @Override
         public int hashCode() {
-            return currentId.hashCode();
+            return current.id.hashCode();
         }
 
 
@@ -204,7 +206,7 @@ class Indexer {
         public int compareTo(final QueueElement o) {
             if (o == null)
                 return -1;
-            return currentId.compareTo(o.currentId);
+            return current.id.compareTo(o.current.id);
         }
     }
 }
