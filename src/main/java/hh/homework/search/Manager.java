@@ -3,7 +3,6 @@ package hh.homework.search;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Created by fib on 08/02/15.
@@ -27,14 +26,13 @@ public class Manager {
     }
 
     public List<Long> searchDocuments(final String query, final String logic, final int count) {
-        final List<String> terms =  getTerms(query);
-        final List<Long> documents = (logic.equalsIgnoreCase("AND")
+        final List<String> terms = getTerms(query);
+        return (logic.equalsIgnoreCase("AND")
                 ? indexer.andOperation(terms, count)
                 : indexer.orOperation(terms, count));
-        return documents;
     }
 
-    private List<String> getTerms(final String text){
+    private List<String> getTerms(final String text) {
         return stopWordsAnalyzer.execute(normalizer.execute(tokenizer.execute(text)));
     }
 }
